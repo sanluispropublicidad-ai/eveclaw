@@ -1,10 +1,28 @@
 import type { LanguageModelMiddleware, ModelMessage } from "ai";
 import { gateway, wrapLanguageModel } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { defineAgent, defineDynamic } from "eve";
 
-const DEFAULT_MODEL = "anthropic/claude-sonnet-5";
+// Default model. With LLM_BASE_URL + LLM_API_KEY set, the agent talks straight
+// to that OpenAI-compatible provider instead of Vercel's AI Gateway, so the
+// default and everything the chat picker sends must be ids that provider knows.
+const DEFAULT_MODEL = process.env.LLM_MODEL ?? "anthropic/claude-sonnet-5";
 
-const MODEL_ID_PATTERN = /^[\w.-]+\/[\w.:-]+$/;
+// Gateway ids are "vendor/model"; self-hosted gateways (Vyce, b.ai, NaraRouter)
+// use bare slugs like "deepseek-v4-flash", so the slash is optional now.
+const MODEL_ID_PATTERN = /^[\w.-]+(\/[\w.:-]+)?$/;
+
+const CUSTOM_PROVIDER = Boolean(process.env.LLM_BASE_URL && process.env.LLM_API_KEY);
+
+function liveModel(modelId: string) {
+  if (CUSTOM_PROVIDER) {
+    return createOpenAI({
+      baseURL: process.env.LLM_BASE_URL!,
+      apiKey: process.env.LLM_API_KEY!,
+    }).chat(modelId);
+  }
+  return gateway(modelId);
+}
 
 /** The AI SDK's provider-agnostic reasoning effort levels, minus the default. */
 const REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh"] as const;
@@ -79,23 +97,45 @@ function reasoningMiddleware(reasoning: ReasoningLevel): LanguageModelMiddleware
 }
 
 export default defineAgent({
-  model: defineDynamic({
-    fallback: DEFAULT_MODEL,
-    events: {
-      "turn.started": (_event, ctx) => requestedSettings(ctx.messages).model,
-      // Reasoning effort is a per-call AI SDK setting, not a field the dynamic
-      // model selection object accepts, so a requested level rides on a live
-      // gateway model wrapped with default settings. Live models are only
-      // allowed from step.started; with no level requested this returns null
-      // and the turn-scoped string selection (plain prompt-cache path) wins.
-      "step.started": (_event, ctx) => {
-        const { model, reasoning } = requestedSettings(ctx.messages);
-        if (reasoning === null) return null;
-        return wrapLanguageModel({
-          model: gateway(model ?? DEFAULT_MODEL),
-          middleware: reasoningMiddleware(reasoning),
-        });
-      },
-    },
-  }),
+  // A provider outside the AI Gateway isn't in eve's model catalog, so
+  // compaction can't look up its context window and the build fails without
+  // this. 128K is a safe floor for the DeepSeek-class models.
+  ...(CUSTOM_PROVIDER ? { modelContextWindowTokens: 131072 } : {}),
+  model: CUSTOM_PROVIDER
+    ? // Own provider: every selection resolves through it, including the
+      // per-turn one the chat picker sends. String ids can't be used here
+      // because the harness would resolve them against the gateway.
+      defineDynamic({
+        fallback: liveModel(DEFAULT_MODEL),
+        events: {
+          "step.started": (_event, ctx) => {
+            const { model, reasoning } = requestedSettings(ctx.messages);
+            const target = liveModel(model ?? DEFAULT_MODEL);
+            if (reasoning === null) return target;
+            return wrapLanguageModel({
+              model: target,
+              middleware: reasoningMiddleware(reasoning),
+            });
+          },
+        },
+      })
+    : defineDynamic({
+        fallback: DEFAULT_MODEL,
+        events: {
+          "turn.started": (_event, ctx) => requestedSettings(ctx.messages).model,
+          // Reasoning effort is a per-call AI SDK setting, not a field the dynamic
+          // model selection object accepts, so a requested level rides on a live
+          // gateway model wrapped with default settings. Live models are only
+          // allowed from step.started; with no level requested this returns null
+          // and the turn-scoped string selection (plain prompt-cache path) wins.
+          "step.started": (_event, ctx) => {
+            const { model, reasoning } = requestedSettings(ctx.messages);
+            if (reasoning === null) return null;
+            return wrapLanguageModel({
+              model: gateway(model ?? DEFAULT_MODEL),
+              middleware: reasoningMiddleware(reasoning),
+            });
+          },
+        },
+      }),
 });

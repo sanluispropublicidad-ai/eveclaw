@@ -1,6 +1,29 @@
 import { gateway } from "ai";
 
+// With LLM_BASE_URL + LLM_API_KEY set the agent talks to that provider, so the
+// chat picker has to list *its* catalog, not the gateway's.
+async function customModels(): Promise<{ id: string; name: string; description: null; pricing: null }[]> {
+  const baseURL = process.env.LLM_BASE_URL;
+  const apiKey = process.env.LLM_API_KEY;
+  if (!baseURL || !apiKey) return [];
+  const response = await fetch(`${baseURL.replace(/\/+$/, "")}/models`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!response.ok) return [];
+  const payload = (await response.json()) as { data?: { id?: string }[] };
+  return (payload.data ?? [])
+    .filter((model): model is { id: string } => typeof model.id === "string")
+    .map((model) => ({ id: model.id, name: model.id, description: null, pricing: null }));
+}
+
 export async function GET() {
+  if (process.env.LLM_BASE_URL && process.env.LLM_API_KEY) {
+    try {
+      return Response.json({ models: await customModels() });
+    } catch {
+      return Response.json({ models: [] });
+    }
+  }
   try {
     const { models } = await gateway.getAvailableModels();
     const language = models
