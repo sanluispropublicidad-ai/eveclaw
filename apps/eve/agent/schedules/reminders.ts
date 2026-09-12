@@ -27,9 +27,11 @@ function reminderMessage(reminder: ReminderRow): string {
 }
 
 export default defineSchedule({
-  // Vercel Hobby solo permite cron diario; el original era "* * * * *".
-  // Con plan Pro se puede volver a cada minuto. 13:00 UTC = 07:00 hora de SLP.
-  cron: "0 13 * * *",
+  // Vercel Hobby solo acepta cron diario, así que el valor por defecto es
+  // diario (13:00 UTC = 07:00 hora de SLP). En local no hay ese límite:
+  // poniendo REMINDER_CRON="* * * * *" en .env.local recupera el minuto a
+  // minuto original. Sin Pro, Vercel sigue usando el valor diario.
+  cron: process.env.REMINDER_CRON || "0 13 * * *",
   async run({ receive, waitUntil, appAuth }) {
     const due = await claimDueReminders();
 
