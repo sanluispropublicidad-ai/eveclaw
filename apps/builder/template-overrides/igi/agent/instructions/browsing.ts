@@ -3,27 +3,30 @@ import { defineDynamic, defineInstructions } from "eve/instructions";
 // web_fetch is a plain HTTP fetch: no browser, no JavaScript, no cookies. Sites
 // behind anti-bot protection answer it with 403, and client-rendered pages come
 // back nearly empty. Measured 2026-09-15: web_fetch on mx.investing.com
-// returned "Request failed with status code: 403" while the browser extension
-// rendered the same URL fine. Without this note the agent treats that 403 as
-// the page being unreachable and answers from the search excerpt alone.
+// returned "Request failed with status code: 403".
 //
-// The order matters: browser__read WITH a url fetches without the browser and
-// hits the same 403, so navigate first and then read the rendered tab.
+// The first version of this note explained the rule in prose ("navigate first
+// and then read the tab") and the model still called browser__read WITH a url,
+// which fetches without the browser and hit the same 403. Prose lost to the
+// tool's own parameter. The note now spells out the exact calls and marks the
+// url argument as forbidden, because concrete shapes survive and rules do not.
 const BROWSING_NOTE = `
-Reading pages: web_fetch has no browser behind it, so sites with anti-bot
-protection answer 403 and pages that render client-side come back empty. When
-that happens, do not give up and do not call the page unreachable — switch to
-the browser:
+Reading a page web_fetch cannot open (403, empty body, or content that only
+appears with JavaScript). Exact sequence, in this order:
 
-1. browser__navigate with the URL. That opens it in the sandboxed Chromium; the
-   browser launches on first use, so the first call is slower.
-2. browser__read with NO url argument, so it reads the rendered tab instead of
-   fetching again. Reach for browser__snapshot only when you need to see or
-   click elements, and browser__get when you need one specific value.
+1. browser__navigate  {"action": "goto", "url": "https://example.com/page"}
+2. browser__read      {}
+3. If 2 came back empty, try browser__get {"property": "text"}, then
+   browser__snapshot {} to see the elements.
 
-browser__read with a url argument fetches without the browser and hits the same
-403, so navigate first and then read the tab. If the page still refuses, say so
-plainly instead of presenting the search excerpt as the page content.
+Never pass a url to browser__read in this flow. With a url it fetches without
+the browser and returns the same 403 you were escaping; with no arguments it
+reads the tab the browser already rendered. Passing the url is the single
+mistake that makes this whole path look broken.
+
+A 403 from web_fetch is not the page being unreachable — it means the page
+refuses plain clients. Try the browser before saying you could not read it, and
+never present a search excerpt as if it were the page content.
 `.trim();
 
 export default defineDynamic({
