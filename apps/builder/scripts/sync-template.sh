@@ -32,16 +32,30 @@ git checkout FETCH_HEAD -- apps/eve
 cp apps/builder/template-overrides/instructions.md apps/eve/agent/instructions.md
 
 # IGI overrides. The placeholder copied above is what the product ships; these
-# two files are this deployment's own identity, plus the authored web_search
-# that replaces the provider-managed one (the harness only substitutes a native
-# search for openai/anthropic/google/gateway models, and this agent runs Vyce).
-# They are kept in apps/builder, which is never mirrored, and restored here so
-# that a sync cannot silently revert production.
+# files are this deployment's own identity, its authored web_search (the harness
+# only substitutes a native search for openai/anthropic/google/gateway models,
+# and this agent runs Vyce), and its Mexico City clock. They live in
+# apps/builder, which is never mirrored, and are laid back over the mirror here
+# so a sync cannot silently revert production.
+#
+# Layout mirrors the destination: template-overrides/igi/agent/<path> is copied
+# to apps/eve/agent/<path>. An override wins over ruth, so a ruth change to an
+# overridden file would be frozen out — hence the drift warning below.
 IGI_OVERRIDES="apps/builder/template-overrides/igi"
-if [ -d "$IGI_OVERRIDES" ]; then
-  cp "$IGI_OVERRIDES/instructions.md" apps/eve/agent/instructions.md
-  mkdir -p apps/eve/agent/tools
-  cp "$IGI_OVERRIDES/tools/web_search.ts" apps/eve/agent/tools/web_search.ts
+IGI_BASE="apps/builder/template-overrides/igi/base.sha256"
+if [ -d "$IGI_OVERRIDES/agent" ]; then
+  find "$IGI_OVERRIDES/agent" -type f -print | while IFS= read -r src; do
+    rel="${src#"$IGI_OVERRIDES/agent/"}"
+    # instructions.md is the placeholder slot: it is meant to differ.
+    if [ "$rel" = "instructions.md" ]; then continue; fi
+    recorded="$(awk -v p="agent/$rel" '$2 == p { print $1 }' "$IGI_BASE" 2>/dev/null || true)"
+    if [ -z "$recorded" ]; then continue; fi
+    upstream="$(git show "FETCH_HEAD:apps/eve/agent/$rel" 2>/dev/null | sha256sum | cut -d' ' -f1 || true)"
+    if [ -n "$upstream" ] && [ "$upstream" != "$recorded" ]; then
+      echo "WARNING: ruth changed agent/$rel — the IGI override wins, so review it against the new upstream. ruth: $(printf '%s' "$upstream" | cut -c1-12), override base: $(printf '%s' "$recorded" | cut -c1-12)."
+    fi
+  done
+  cp -R "$IGI_OVERRIDES/agent/." apps/eve/agent/
 fi
 
 printf '%s\n' "$release" > apps/eve/.eve-template-release
