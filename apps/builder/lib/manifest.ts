@@ -88,7 +88,11 @@ export const FEATURE_FILES: Record<FeatureId, readonly string[]> = {
     "agent/extensions/browser/tools/tabs.ts",
     "agent/extensions/browser/tools/upload.ts",
   ],
-  utilities: ["agent/tools/get_weather.ts", "agent/tools/roll_dice.ts"],
+  utilities: [
+    "agent/tools/get_weather.ts",
+    "agent/tools/roll_dice.ts",
+    "agent/tools/web_search.ts",
+  ],
 };
 
 export function isExcluded(relativePath: string): boolean {
