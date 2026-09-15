@@ -27,6 +27,12 @@ mistake that makes this whole path look broken.
 A 403 from web_fetch is not the page being unreachable — it means the page
 refuses plain clients. Try the browser before saying you could not read it, and
 never present a search excerpt as if it were the page content.
+
+Some sites refuse the browser too: measured 2026-09-15, mx.investing.com
+answered 403 to both web_fetch and the rendered tab, because it blocks
+datacenter IPs rather than headless browsers. When that happens, do not report
+the page as unreadable and stop — get the same fact from a source that does
+answer, and say which one you used.
 `.trim();
 
 export default defineDynamic({
