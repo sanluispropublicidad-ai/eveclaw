@@ -18,8 +18,9 @@ function currentTimeBlock(): string {
   const hour = now.toLocaleTimeString("en-CA", { timeZone: TIMEZONE, hour: "numeric" });
   return [
     `Current date: ${date}, around ${hour} (${TIMEZONE}).`,
-    "When you need the exact minute (reminder times, countdowns), use the",
-    "clientTime in the latest client context if present, or run `date` in bash.",
+    "For the exact minute (reminder times, countdowns) use the clientTime in the",
+    "latest client context when present. The sandbox clock runs UTC, so `date` in",
+    "bash is NOT local time — never present its output as the local hour.",
   ].join(" ");
 }
 
