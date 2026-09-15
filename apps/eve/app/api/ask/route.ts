@@ -157,7 +157,7 @@ export async function GET(request: Request) {
     notes: [
       "Text only for now - attachments are not accepted on this route.",
       `message is capped at ${MAX_MESSAGE_CHARS} characters.`,
-      "Send `Accept: text/plain` to get the reply with no JSON wrapper.",
+      "Append ?format=text to get the reply with no JSON wrapper.",
     ],
   });
 }
@@ -207,7 +207,10 @@ export async function POST(request: Request) {
 
   const summary = summarize(events);
 
-  if (request.headers.get("accept")?.includes("text/plain") === true) {
+  // `?format=text` returns the bare reply. A query parameter rather than
+  // `Accept: text/plain`: the Accept variant reached the function but never
+  // answered in production, while the JSON path was fine.
+  if (new URL(request.url).searchParams.get("format") === "text") {
     return new Response(summary.reply ?? "", {
       headers: { "content-type": "text/plain; charset=utf-8" },
     });
