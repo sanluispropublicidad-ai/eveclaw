@@ -87,6 +87,7 @@ export const FEATURE_FILES: Record<FeatureId, readonly string[]> = {
     "agent/extensions/browser/tools/set_checked.ts",
     "agent/extensions/browser/tools/tabs.ts",
     "agent/extensions/browser/tools/upload.ts",
+    "agent/instructions/browsing.ts",
   ],
   utilities: [
     "agent/tools/get_weather.ts",
