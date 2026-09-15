@@ -1,6 +1,6 @@
 node_modules
 .env*
-.eve/dev-runtime
+.eve
 .next
 .turbo
 .output

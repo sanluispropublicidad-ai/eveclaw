@@ -18,10 +18,16 @@ import { requireWebAuth } from "@/lib/web-auth";
 
 const MAX_MESSAGE_CHARS = 8000;
 
-/** Where our own eve routes live. Inside the deployment that is this host. */
+/**
+ * Where our own eve routes live. Inside the deployment that is this host.
+ *
+ * Prefer the production domain over `VERCEL_URL`: the deployment-specific host
+ * sits behind Vercel Deployment Protection, so a self-call to it returns a 401
+ * SSO redirect instead of reaching the agent. Mirrors `lib/webhooks-db.ts`.
+ */
 function agentHost(): string {
-  const vercel = process.env.VERCEL_URL;
-  if (vercel !== undefined && vercel.length > 0) return `https://${vercel}`;
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+  if (host !== undefined && host.length > 0) return `https://${host}`;
   return `http://localhost:${process.env.PORT ?? "3000"}`;
 }
 
